@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>🐧 ペンギン積み木タワーDX</title>
+
+<style>
+*{
+margin:0;
+padding:0;
+box-sizing:border-box;
+-webkit-tap-highlight-color:transparent;
+}
+
+html,body{
+width:100%;
+height:100%;
+overflow:hidden;
+touch-action:none;
+font-family:sans-serif;
+background:linear-gradient(#8fe6ff,#ffffff);
+}
+
+body{
+display:flex;
+justify-content:center;
+align-items:center;
+}
+
+.screen{
+display:none;
+width:100%;
+height:100%;
+padding:12px;
+}
+
+.active{
+display:flex;
+flex-direction:column;
+}
+
+.center{
+justify-content:center;
+align-items:center;
+text-align:center;
+}
+
+h1{
+margin-bottom:15px;
+}
+
+.info{
+max-width:420px;
+line-height:1.7;
+font-size:16px;
+}
+
+button{
+border:none;
+border-radius:18px;
+background:#0078ff;
+color:white;
+font-size:20px;
+padding:16px 28px;
+min-width:220px;
+margin-top:20px;
+}
+
+#gameScreen{
+justify-content:flex-start;
+}
+
+.topbar{
+display:flex;
+justify-content:space-between;
+font-size:22px;
+font-weight:bold;
+padding:10px;
+max-width:460px;
+width:100%;
+margin:auto;
+}
+
+#gameArea{
+position:relative;
+flex:1;
+width:100%;
+max-width:460px;
+margin:auto;
+background:linear-gradient(#dff8ff,#ffffff);
+border:4px solid #57bfff;
+border-radius:20px;
+overflow:hidden;
+}
+
+#moving{
+position:absolute;
+top:20px;
+font-size:60px;
+pointer-events:none;
+user-select:none;
+z-index:20;
+}
+
+#tower{
+position:absolute;
+left:0;
+bottom:70px;
+width:100%;
+height:calc(100% - 70px);
+}
+
+.block{
+position:absolute;
+width:70px;
+height:34px;
+display:flex;
+align-items:center;
+justify-content:center;
+font-size:24px;
+border-radius:10px;
+background:linear-gradient(#ffffff,#dff6ff);
+border:2px solid #8ddcff;
+}
+
+#water{
+position:absolute;
+left:0;
+bottom:0;
+width:100%;
+height:70px;
+background:#6bc8ff;
+}
+
+#effect{
+position:absolute;
+left:50%;
+top:40%;
+transform:translate(-50%,-50%);
+font-size:42px;
+font-weight:bold;
+opacity:0;
+transition:.5s;
+pointer-events:none;
+text-shadow:0 0 10px white;
+z-index:30;
+}
+
+#combo{
+position:absolute;
+left:50%;
+top:18%;
+transform:translateX(-50%);
+font-size:28px;
+font-weight:bold;
+color:#ff6600;
+opacity:0;
+transition:.4s;
+z-index:30;
+}
+
+.rank{
+font-size:50px;
+font-weight:bold;
+color:#ff6600;
+margin:15px 0;
+}
+</style>
+</head>
+<body>
+
+<div id="startScreen" class="screen active center">
+
+<h1>🐧 ペンギン積み木タワーDX</h1>
+
+<div class="info">
+左右に動くペンギンをタップ！<br>
+最初の土台ペンギンの上へ積み上げよう！<br>
+少しズレても乗っていればOK！<br>
+大きく外すと減点！<br>
+30秒で最高記録を目指そう！
+</div>
+
+<button id="startBtn">スタート</button>
+
+</div>
+
+<div id="gameScreen" class="screen">
+
+<div class="topbar">
+<div>🏆 <span id="score">0</span></div>
+<div>⏰ <span id="time">30</span></div>
+</div>
+
+<div id="gameArea">
+
+<div id="moving">🐧</div>
+
+<div id="combo"></div>
+<div id="effect"></div>
+
+<div id="tower"></div>
+
+<div id="water"></div>
+
+</div>
+
+</div>
+
+<div id="resultScreen" class="screen center">
+
+<h1>結果発表</h1>
+
+<h2>スコア: <span id="finalScore">0</span></h2>
+
+<div class="rank" id="rank">C</div>
+
+<button id="retryBtn">もう一度遊ぶ</button>
+
+</div>
+
+<script>
+
+const startScreen=document.getElementById("startScreen");
+const gameScreen=document.getElementById("gameScreen");
+const resultScreen=document.getElementById("resultScreen");
+
+const gameArea=document.getElementById("gameArea");
+const moving=document.getElementById("moving");
+const tower=document.getElementById("tower");
+
+const scoreEl=document.getElementById("score");
+const timeEl=document.getElementById("time");
+const finalScore=document.getElementById("finalScore");
+const rankEl=document.getElementById("rank");
+
+const comboView=document.getElementById("combo");
+const effect=document.getElementById("effect");
+
+const blockWidth=70;
+const blockHeight=34;
+
+let score=0;
+let time=30;
+
+let pos=0;
+let dir=1;
+let speed=3;
+
+let combo=0;
+
+let gameRunning=false;
+let timer=null;
+let animation=null;
+
+let stack=[];
+
+function show(screen){
+
+[startScreen,gameScreen,resultScreen].forEach(s=>{
+s.classList.remove("active");
+});
+
+screen.classList.add("active");
+
+}
+
+function showEffect(text,color){
+
+effect.textContent=text;
+effect.style.color=color;
+effect.style.opacity="1";
+effect.style.transform="translate(-50%,-50%) scale(1.4)";
+
+setTimeout(()=>{
+effect.style.opacity="0";
+effect.style.transform="translate(-50%,-50%) scale(1)";
+},500);
+
+}
+
+function startGame(){
+
+score=0;
+time=30;
+speed=3;
+pos=0;
+dir=1;
+combo=0;
+stack=[];
+
+tower.innerHTML="";
+
+scoreEl.textContent="0";
+timeEl.textContent="30";
+
+show(gameScreen);
+
+const areaWidth=gameArea.clientWidth;
+const baseCenter=areaWidth/2;
+
+stack.push(baseCenter);
+
+const base=document.createElement("div");
+base.className="block";
+base.textContent="🐧";
+base.style.left=(baseCenter-blockWidth/2)+"px";
+base.style.bottom="0px";
+
+tower.appendChild(base);
+
+gameRunning=true;
+
+clearInterval(timer);
+
+timer=setInterval(()=>{
+
+time--;
+timeEl.textContent=time;
+
+if(time<=22) speed=4;
+if(time<=15) speed=5.5;
+if(time<=8) speed=7;
+if(time<=4) speed=9;
+
+if(time<=0){
+endGame();
+}
+
+},1000);
+
+animate();
+
+}
+
+function animate(){
+
+cancelAnimationFrame(animation);
+
+function loop(){
+
+if(!gameRunning) return;
+
+const areaWidth=gameArea.clientWidth;
+
+pos+=dir*speed;
+
+if(pos<=0){
+pos=0;
+dir=1;
+}
+
+if(pos>=areaWidth-60){
+pos=areaWidth-60;
+dir=-1;
+}
+
+moving.style.left=pos+"px";
+
+animation=requestAnimationFrame(loop);
+
+}
+
+loop();
+
+}
+
+function placeBlock(){
+
+if(!gameRunning) return;
+
+const center=pos+30;
+const targetCenter=stack[stack.length-1];
+
+const diff=Math.abs(center-targetCenter);
+
+let point=0;
+
+if(diff<=10){
+
+point=40;
+combo++;
+
+showEffect("PERFECT!", "#ff0080");
+
+if(combo>=2){
+
+comboView.textContent=combo+" COMBO!";
+comboView.style.opacity="1";
+
+setTimeout(()=>{
+comboView.style.opacity="0";
+},700);
+
+point+=combo*3;
+}
+
+}
+else if(diff<=25){
+
+point=25;
+combo++;
+
+showEffect("GOOD!", "#ff9900");
+
+}
+else if(diff<=55){
+
+point=10;
+combo=0;
+
+showEffect("ギリギリ!", "#0099ff");
+
+}
+else{
+
+point=-15;
+combo=0;
+
+showEffect("MISS -15", "#ff0000");
+
+score+=point;
+
+if(score<0) score=0;
+
+scoreEl.textContent=score;
+
+return;
+}
+
+score+=point;
+scoreEl.textContent=score;
+
+stack.push(center);
+
+const block=document.createElement("div");
+block.className="block";
+block.textContent="🐧";
+
+block.style.left=(center-blockWidth/2)+"px";
+block.style.bottom=((stack.length-1)*blockHeight)+"px";
+
+tower.appendChild(block);
+
+if(stack.length===10){
+
+score+=50;
+scoreEl.textContent=score;
+
+showEffect("🎉 BONUS +50", "#0066ff");
+
+}
+
+if(stack.length===20){
+
+score+=100;
+scoreEl.textContent=score;
+
+showEffect("👑 SUPER BONUS!", "#7a00ff");
+
+}
+
+if(stack.length===30){
+
+score+=200;
+scoreEl.textContent=score;
+
+showEffect("❄️ PENGUIN KING!", "#00bb88");
+
+}
+
+if(stack.length*blockHeight > tower.clientHeight-80){
+
+score+=300;
+scoreEl.textContent=score;
+
+showEffect("🏰 COMPLETE!", "#00aa55");
+
+gameRunning=false;
+
+setTimeout(()=>{
+endGame();
+},1000);
+
+}
+
+}
+
+function endGame(){
+
+gameRunning=false;
+
+clearInterval(timer);
+cancelAnimationFrame(animation);
+
+finalScore.textContent=score;
+
+let rank="C";
+
+if(score>=100) rank="B";
+if(score>=250) rank="A";
+if(score>=450) rank="S";
+if(score>=700) rank="SS";
+
+rankEl.textContent=rank;
+
+show(resultScreen);
+
+}
+
+document.getElementById("startBtn").addEventListener("click",startGame);
+document.getElementById("retryBtn").addEventListener("click",startGame);
+
+gameArea.addEventListener("pointerdown",placeBlock);
+
+</script>
+
+</body>
+</html>
